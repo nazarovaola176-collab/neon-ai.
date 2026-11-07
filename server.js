@@ -1,11 +1,29 @@
 
 require("dotenv").config();
-const express = require("express");
 
+const express = require("express");
 const app = express();
-app.use(express.json());
+
+app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
+// Проверка работы сервера
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ONLINE",
+    name: "NEON AI"
+  });
+});
+
+// Проверка настроек
+app.get("/api/config", (req, res) => {
+  res.json({
+    status: "ONLINE",
+    model: process.env.MODEL || "not configured"
+  });
+});
+
+// Основной ИИ-чат
 app.post("/api/chat", async (req, res) => {
   try {
     const messages = req.body.messages;
@@ -18,7 +36,7 @@ app.post("/api/chat", async (req, res) => {
 
     if (!process.env.OPENROUTER_API_KEY) {
       return res.status(500).json({
-        error: "API-ключ не найден в .env"
+        error: "API-ключ OpenRouter не найден"
       });
     }
 
@@ -29,14 +47,17 @@ app.post("/api/chat", async (req, res) => {
         headers: {
           "Authorization":
             `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://neon-ai.onrender.com",
+          "X-Title": "NEON AI"
         },
         body: JSON.stringify({
-          model: process.env.MODEL,
+          model: process.env.MODEL || "openrouter/free",
           messages: [
             {
               role: "system",
-              content: "Ты NEON AI. Отвечай на русском языке."
+              content:
+                "Ты NEON AI — дружелюбный умный ИИ. Отвечай на русском языке, понятно и полезно."
             },
             ...messages.slice(-20)
           ]
@@ -51,24 +72,30 @@ app.post("/api/chat", async (req, res) => {
       console.log("OPENROUTER ERROR:", data);
 
       return res.status(502).json({
-        error: data.error?.message || "Ошибка OpenRouter"
+        error:
+          data.error?.message || "Ошибка OpenRouter"
       });
     }
 
+    const reply =
+      data.choices?.[0]?.message?.content;
+
     res.json({
-      reply: data.choices?.[0]?.message?.content || "Пустой ответ"
+      reply: reply || "NEON AI не получил ответ."
     });
 
   } catch (error) {
     console.log("SERVER ERROR:", error.message);
 
     res.status(500).json({
-      error: error.message
+      error: "Ошибка сервера: " + error.message
     });
   }
 });
 
-app.listen(3000, "127.0.0.1", () => {
-  console.log("NEON AI запущен: http://localhost:3000");
-});
+// Запуск для Render
+const PORT = process.env.PORT || 3000;
 
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`NEON AI ONLINE на порту ${PORT}`);
+});
